@@ -17,7 +17,7 @@ export class AuthController {
    * @route POST /auth/register
    */
   @Post('register')
-  @HttpCode(HttpStatus.NOT_IMPLEMENTED)
+  @HttpCode(HttpStatus.CREATED)
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }

@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { PrismaService } from '@prisma/prisma.service';
+import * as argon2 from 'argon2';
 
 /**
  * Serviço responsável pelas regras de negócio da autenticação.
@@ -11,11 +13,32 @@ import { LoginDto } from './dto/login.dto';
  */
 @Injectable()
 export class AuthService {
+  constructor(private readonly prisma: PrismaService) {}
   /**
    * Cria um novo usuário a partir do RegisterDto
    */
-  async register(_dto: RegisterDto) {
-    return { ok: false, message: 'Not implemented yet' };
+  async register(dto: RegisterDto) {
+    const exists = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (exists) throw new ConflictException(`E-mail já está em uso.`);
+
+    const passwordHash = await argon2.hash(dto.password);
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email.toLowerCase(),
+        displayName: dto.displayName,
+        passwordHash,
+      },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        createdAt: true,
+      },
+    });
+    return user;
   }
 
   /**
