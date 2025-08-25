@@ -1,8 +1,9 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { PrismaService } from '@prisma/prisma.service';
 import * as argon2 from 'argon2';
+import { JwtService } from '@nestjs/jwt';
 
 /**
  * Serviço responsável pelas regras de negócio da autenticação.
@@ -13,7 +14,10 @@ import * as argon2 from 'argon2';
  */
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwt: JwtService,
+  ) {}
   /**
    * Cria um novo usuário a partir do RegisterDto
    */
@@ -44,8 +48,28 @@ export class AuthService {
   /**
    * Valida credenciais e retorna tokens de acesso/refresh
    */
-  async login(_dto: LoginDto) {
-    return { ok: false, message: 'Not implemented yet' };
+  async login(dto: LoginDto) {
+    const email = dto.email.toLowerCase().trim();
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, displayName: true, passwordHash: true },
+    });
+
+    if (!user) throw new UnauthorizedException('Credenciais inválidas');
+
+    const ok = await argon2.verify(user.passwordHash, dto.password);
+    if (!ok) throw new UnauthorizedException('Credenciais inválidas');
+
+    const payload = { sub: user.id, email: user.email };
+    const accessToken = await this.jwt.signAsync(payload);
+    const expiresIn = (this as any).jwt.options.signOptions?.expiresIn ?? '900s';
+
+    return {
+      accessToken,
+      expiresIn,
+      user: { id: user.id, email: user.email, displayName: user.displayName },
+    };
   }
 
   /**
