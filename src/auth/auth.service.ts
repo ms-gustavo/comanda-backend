@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { PrismaService } from '@prisma/prisma.service';
@@ -75,8 +80,14 @@ export class AuthService {
   /**
    * Retorna dados do usuário logado (via access token)
    */
-  async me(_userId?: string) {
-    return { ok: false, message: 'Not implemented yet' };
+  async me(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, displayName: true, createdAt: true },
+    });
+
+    if (!user) throw new NotFoundException(`Usuário não encontrado!`);
+    return user;
   }
 
   /**
