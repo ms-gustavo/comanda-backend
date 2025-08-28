@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ComandaStatus {
+  OPEN
+  CLOSED
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -15,6 +20,7 @@ model User {
   createdAt    DateTime @default(now())
 
   refreshTokens RefreshToken[]
+  Comanda       Comanda[]
 }
 
 model RefreshToken {
@@ -29,5 +35,35 @@ model RefreshToken {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+}
+
+model Comanda {
+  id           String        @id @default(uuid())
+  name         String
+  status       ComandaStatus @default(OPEN)
+  ownerId      String
+  owner        User          @relation(fields: [ownerId], references: [id])
+  participants Participant[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  closedAt  DateTime?
+
+  @@index([ownerId])
+}
+
+model Participant {
+  id        String  @id @default(uuid())
+  name      String
+  userId    String?
+  comandaId String
+  comanda   Comanda @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([comandaId, name])
+  @@index([comandaId])
   @@index([userId])
 }
