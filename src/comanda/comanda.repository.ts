@@ -41,4 +41,16 @@ export class ComandaRepository {
       return { comanda, participantsCount: count };
     });
   }
+
+  async findSnapshotById(comandaId: string) {
+    return this.prisma.comanda.findUnique({
+      where: { id: comandaId },
+      include: {
+        participants: {
+          orderBy: [{ createdAt: 'asc' }, { name: 'asc' }],
+          select: { id: true, name: true, userId: true, createdAt: true, updatedAt: true },
+        },
+      },
+    });
+  }
 }
