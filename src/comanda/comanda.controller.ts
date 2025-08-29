@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -16,11 +17,25 @@ import { ComandaService } from './comanda.service';
 import { AuthUser } from 'src/auth/auth-user.decorator';
 import { CreateComandaDto } from './dto/create-comanda.dto';
 import { strongEtagFrom } from '@common/utils/etag.util';
+import { GetMyComandasQueryDto } from './dto/get-my-comandas.query';
 
 @Controller('comandas')
 @UseGuards(JwtAuthGuard)
 export class ComandaController {
   constructor(private readonly service: ComandaService) {}
+
+  @Get()
+  async listMyComandas(@AuthUser() user: { sub: string }, @Query() query: GetMyComandasQueryDto) {
+    const res = await this.service.listMyComandas(user.sub, {
+      role: query.role ?? 'all',
+      status: query.status,
+      q: query.q,
+      cursor: query.cursor,
+      limit: query.limit ?? 20,
+    });
+
+    return res;
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)

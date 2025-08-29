@@ -45,12 +45,32 @@ model Comanda {
   ownerId      String
   owner        User          @relation(fields: [ownerId], references: [id])
   participants Participant[]
+  items        Item[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   closedAt  DateTime?
 
   @@index([ownerId])
+  @@index([createdAt])
+}
+
+model Item {
+  id           String       @id @default(uuid())
+  name         String
+  price        Decimal      @db.Decimal(10, 2)
+  quantity     Int          @default(1)
+  note         String?
+  comandaId    String
+  comanda      Comanda      @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+  assignedToId String?
+  assignedTo   Participant? @relation(fields: [assignedToId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([comandaId])
+  @@index([assignedToId])
 }
 
 model Participant {
@@ -62,6 +82,7 @@ model Participant {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  Item      Item[]
 
   @@unique([comandaId, name])
   @@index([comandaId])
