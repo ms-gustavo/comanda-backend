@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '@prisma/prisma.service';
 
 @Injectable()
@@ -112,5 +113,86 @@ export class ComandaRepository {
         },
       },
     });
+  }
+
+  async listItems(comandaId: string) {
+    return this.prisma.item.findMany({
+      where: { comandaId },
+      orderBy: [{ createdAt: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        quantity: true,
+        note: true,
+        assignedToId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async createItem(
+    comandaId: string,
+    data: {
+      name: string;
+      price: string;
+      quantity: number;
+      note?: string;
+      assignedToId?: string;
+    },
+  ) {
+    return this.prisma.item.create({
+      data: {
+        comandaId,
+        name: data.name,
+        price: new (Decimal as any)(data.price),
+        quantity: data.quantity,
+        note: data.note,
+        assignedToId: data.assignedToId ?? null,
+      },
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        quantity: true,
+        note: true,
+        assignedToId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async updateItem(
+    itemId: string,
+    data: {
+      name?: string;
+      price?: string;
+      quantity?: number;
+      note?: string;
+      assignedToId?: string | null;
+    },
+  ) {
+    const payload: any = { ...data };
+    if (data.price !== undefined) payload.price = new (Decimal as any)(data.price);
+    return this.prisma.item.update({
+      where: { id: itemId },
+      data: payload,
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        quantity: true,
+        note: true,
+        assignedToId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async deleteItem(itemId: string) {
+    await this.prisma.item.delete({ where: { id: itemId } });
   }
 }

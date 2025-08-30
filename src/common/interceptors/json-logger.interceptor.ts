@@ -15,7 +15,6 @@ export class JsonLoggerInterceptor implements NestInterceptor {
       tap((_data: unknown) => {
         const ms = Date.now() - now;
         const statusCode = context.switchToHttp().getResponse()?.statusCode || 200;
-        // eslint-disable-next-line no-console
         console.log(
           JSON.stringify({
             level: 'info',

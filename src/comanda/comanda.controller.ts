@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -18,6 +20,8 @@ import { AuthUser } from 'src/auth/auth-user.decorator';
 import { CreateComandaDto } from './dto/create-comanda.dto';
 import { strongEtagFrom } from '@common/utils/etag.util';
 import { GetMyComandasQueryDto } from './dto/get-my-comandas.query';
+import { CreateItemDto } from './dto/create-item.dto';
+import { UpdateItemDto } from './dto/update-item.dto';
 
 @Controller('comandas')
 @UseGuards(JwtAuthGuard)
@@ -80,5 +84,30 @@ export class ComandaController {
   @Get(':id/totals')
   async totals(@Param('id') id: string) {
     return this.service.getTotals(id);
+  }
+
+  @Get(':id/items')
+  async listItems(@Param('id') id: string) {
+    const items = await this.service.listItems(id);
+    return items.map((it) => ({ ...it, price: (it.price as any).toFixed(2) }));
+  }
+
+  @Post(':id/items')
+  @HttpCode(HttpStatus.CREATED)
+  async addItem(@Param('id') id: string, @Body() dto: CreateItemDto) {
+    const it = await this.service.addItems(id, dto);
+    return { ...it, price: (it.price as any).toFixed(2) };
+  }
+
+  @Patch('/items/:itemId')
+  async updateItem(@Param('itemId') itemId: string, @Body() dto: UpdateItemDto) {
+    const it = await this.service.updateItem(itemId, dto);
+    return { ...it, price: (it.price as any).toFixed(2) };
+  }
+
+  @Delete('/items/:itemId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteItem(@Param('itemId') itemId: string) {
+    await this.service.removeItem(itemId);
   }
 }
