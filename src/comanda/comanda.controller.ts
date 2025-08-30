@@ -24,6 +24,9 @@ import { GetMyComandasQueryDto } from './dto/get-my-comandas.query';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { PutItemRateioDto } from './dto/put-item-rateio.dto';
+import { CreateInviteDto } from './dto/create-invite.dto';
+import { AcceptInviteDto } from './dto/accept-invite.dto';
+import * as QRCode from 'qrcode';
 
 @Controller('comandas')
 @UseGuards(JwtAuthGuard)
@@ -130,5 +133,68 @@ export class ComandaController {
     @Param('participantId') participantId: string,
   ) {
     await this.service.deleteItemRateioEntry(itemId, participantId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('comandas/:id/invite')
+  @HttpCode(HttpStatus.CREATED)
+  async createInvite(
+    @Param('id') comandaId: string,
+    @AuthUser() user: { id: string },
+    @Body() dto: CreateInviteDto,
+  ) {
+    return this.service.createInvite(comandaId, user.id, dto);
+  }
+
+  @Get('invite/:code')
+  async previewInvite(@Param('code') code: string) {
+    return this.service.previewInvite(code);
+  }
+
+  @Post('invite/:code/accept')
+  async acceptInvite(
+    @Param('code') code: string,
+    @AuthUser() user: { id: string } | undefined,
+    @Body() dto: AcceptInviteDto,
+    @Req() req: FastifyRequest,
+  ) {
+    const userId = (user as any)?.id;
+    return this.service.acceptInvite(code, { userId, displayName: dto.displayName });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('comandas/:id/invite/:code')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async revokeInvite(
+    @Param('id') comandaId: string,
+    @Param('code') code: string,
+    @AuthUser() user: { id: string },
+  ) {
+    await this.service.revokeInvite(code, comandaId, user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('comandas/:id/invite/:code/qrcode.png')
+  async qrcodePng(
+    @Param('id') comandaId: string,
+    @Param('code') code: string,
+    @AuthUser() user: { id: string },
+    @Res() reply: FastifyReply,
+  ) {
+    const inv = await this.service.previewInvite(code);
+    if (inv.comanda.id !== comandaId) {
+      reply.code(404).send({ message: 'Convite não encontrado' });
+      return;
+    }
+    if (inv.status !== 'active') {
+      reply.code(400).send({ message: 'Convite não está ativo' });
+      return;
+    }
+
+    const url = `${process.env.APP_PUBLIC_URL?.replace(/\/$/, '')}/invite/${code}`;
+    const pngBuffer = await QRCode.toBuffer(url, { type: 'png', margin: 1, scale: 6 });
+    reply.header('Content-Type', 'image/png');
+    reply.header('Cache-Control', 'no-store');
+    reply.send(pngBuffer);
   }
 }

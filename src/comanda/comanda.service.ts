@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ComandaRepository } from './comanda.repository';
 import { PrismaService } from '@prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -75,6 +80,14 @@ export class ComandaService {
       );
 
     return item;
+  }
+
+  private ensureInviteActive(inv: any) {
+    if (!inv) throw new NotFoundException(`Convite não encontrado`);
+    if (inv.revokedAt) throw new BadRequestException(`Convite já utilizado`);
+    if (inv.expiresAt < new Date()) throw new BadRequestException(`Convite expirado`);
+    if (inv.maxUses != null && inv.uses >= inv.maxUses)
+      throw new BadRequestException('Limite de uso atingido');
   }
 
   async listMyComandas(
@@ -295,5 +308,110 @@ export class ComandaService {
     });
     if (!found) throw new NotFoundException('Rateio não encontrado');
     await this.repo.deleteOneRateio(itemId, participantId);
+  }
+
+  async createInvite(
+    comandaId: string,
+    createdBy: string,
+    opts: {
+      ttlHours?: number;
+      maxUses?: number | null;
+      keepExisting?: boolean;
+    },
+  ) {
+    const comanda = await this.repo.findSnapshotById(comandaId);
+    if (!comanda) throw new NotFoundException(`Comanda não encontrada`);
+    if (comanda.ownerId !== createdBy)
+      throw new ForbiddenException(`Você não tem permissão para criar convites`);
+
+    if (!opts.keepExisting) await this.repo.revokeAllInvites(comandaId);
+
+    const ttl = opts.ttlHours ?? parseInt(process.env.INVITE_DEFAULT_TTL_HOURS || '24', 10);
+    const invite = await this.repo.createInvite({
+      comandaId,
+      createdBy,
+      ttlHours: ttl,
+      maxUses: opts.maxUses ?? null,
+    });
+
+    return {
+      code: invite.code,
+      comandaId,
+      expiresAt: invite.expiresAt,
+      maxUses: invite.maxUses,
+      uses: invite.uses,
+      url: `${process.env.APP_PUBLIC_URL?.replace(/\/$/, '')}/invite/${invite.code}`,
+    };
+  }
+
+  async previewInvite(code: string) {
+    const inv = await this.repo.findInviteByCode(code);
+    if (!inv) throw new NotFoundException('Convite não encontrado');
+
+    const comanda = await this.repo.findSnapshotById(inv.comandaId);
+    if (!comanda) throw new NotFoundException('Comanda não existe mais');
+
+    const status = (() => {
+      if (inv.revokedAt) return 'revoked';
+      if (new Date(inv.expiresAt).getTime() < Date.now()) return 'expired';
+      if (inv.maxUses != null && inv.uses >= inv.maxUses) return 'exhausted';
+      return 'active';
+    })();
+
+    return {
+      code: inv.code,
+      status,
+      comanda: {
+        id: comanda.id,
+        name: comanda.name,
+        status: comanda.status,
+        participantsCount: comanda.participants.length,
+      },
+      expiresAt: inv.expiresAt,
+      maxUses: inv.maxUses,
+      uses: inv.uses,
+    };
+  }
+
+  async acceptInvite(code: string, context: { userId?: string; displayName?: string }) {
+    const inv = await this.repo.findInviteByCode(code);
+    this.ensureInviteActive(inv);
+
+    const comanda = await this.repo.findSnapshotById(inv!.comandaId);
+    if (!comanda) throw new NotFoundException('Comanda não encontrada');
+
+    if (context.userId) {
+      const already = comanda.participants.find((p) => p.userId === context.userId);
+      if (!already) {
+        await this.prisma.participant.create({
+          data: {
+            comandaId: comanda.id,
+            userId: context.userId,
+            name: context.displayName || 'Convidado',
+          },
+        });
+      }
+    } else {
+      const name = (context.displayName || '').trim();
+      if (name.length < 2)
+        throw new BadRequestException('displayName é obrigatório para convidados');
+      const exists = await this.prisma.participant.findFirst({
+        where: { comandaId: comanda.id, name },
+      });
+      if (!exists) {
+        await this.prisma.participant.create({ data: { comandaId: comanda.id, name } });
+      }
+    }
+
+    await this.repo.incrementInviteUse(inv!.id);
+
+    return { comandaId: comanda.id, joined: true };
+  }
+
+  async revokeInvite(code: string, comandaId: string, requesterId: string) {
+    const c = await this.repo.findSnapshotById(comandaId);
+    if (!c) throw new NotFoundException('Comanda não encontrada');
+    if (c.ownerId !== requesterId) throw new ForbiddenException('Apenas o dono pode revogar');
+    await this.repo.deleteInvite(code, comandaId);
   }
 }

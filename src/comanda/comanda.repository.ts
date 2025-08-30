@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '@prisma/prisma.service';
+import { customAlphabet } from 'nanoid';
+
+const nanoid = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', 10);
 
 @Injectable()
 export class ComandaRepository {
@@ -223,6 +226,60 @@ export class ComandaRepository {
   async deleteOneRateio(itemId: string, participantId: string) {
     await this.prisma.rateioEntry.delete({
       where: { itemId_participantId: { itemId, participantId } },
+    });
+  }
+
+  async revokeAllInvites(comandaId: string) {
+    await this.prisma.inviteToken.updateMany({
+      where: { comandaId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async createInvite(params: {
+    comandaId: string;
+    createdBy: string;
+    ttlHours: number;
+    maxUses?: number | null;
+  }) {
+    const code = nanoid();
+    const expiresAt = new Date(Date.now() + params.ttlHours * 3600 * 1000);
+
+    return this.prisma.inviteToken.create({
+      data: {
+        code,
+        comandaId: params.comandaId,
+        expiresAt,
+        maxUses: params.maxUses ?? null,
+        createdBy: params.createdBy,
+      },
+      select: {
+        code: true,
+        comandaId: true,
+        expiresAt: true,
+        maxUses: true,
+        uses: true,
+        createdBy: true,
+        revokedAt: true,
+      },
+    });
+  }
+
+  async findInviteByCode(code: string) {
+    return this.prisma.inviteToken.findUnique({ where: { code } });
+  }
+
+  async incrementInviteUse(id: string) {
+    return this.prisma.inviteToken.update({
+      where: { id },
+      data: { uses: { increment: 1 } },
+    });
+  }
+
+  async deleteInvite(code: string, comandaId: string) {
+    await this.prisma.inviteToken.updateMany({
+      where: { code, comandaId, revokedAt: null },
+      data: { revokedAt: new Date() },
     });
   }
 }

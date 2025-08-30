@@ -47,9 +47,10 @@ model Comanda {
   participants Participant[]
   items        Item[]
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  closedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  closedAt    DateTime?
+  InviteToken InviteToken[]
 
   @@index([ownerId])
   @@index([createdAt])
@@ -104,4 +105,23 @@ model Participant {
   @@unique([comandaId, name])
   @@index([comandaId])
   @@index([userId])
+}
+
+model InviteToken {
+  id        String  @id @default(uuid())
+  code      String  @unique
+  comandaId String
+  comanda   Comanda @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  maxUses   Int?
+  uses      Int       @default(0)
+  createdBy String
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([comandaId])
+  @@index([expiresAt])
 }
