@@ -195,4 +195,34 @@ export class ComandaRepository {
   async deleteItem(itemId: string) {
     await this.prisma.item.delete({ where: { id: itemId } });
   }
+
+  async listRateio(itemId: string) {
+    return this.prisma.rateioEntry.findMany({
+      where: { itemId },
+      orderBy: [{ createdAt: 'asc' }],
+      select: { participantId: true, percentage: true, createdAt: true, updatedAt: true },
+    });
+  }
+
+  async replaceRateio(
+    itemId: string,
+    entries: Array<{ participantId: string; percentage: number }>,
+  ) {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.rateioEntry.deleteMany({ where: { itemId } });
+      await tx.rateioEntry.createMany({
+        data: entries.map((e) => ({
+          itemId,
+          participantId: e.participantId,
+          percentage: new (Decimal as any)(e.percentage.toFixed(2)),
+        })),
+      });
+    });
+  }
+
+  async deleteOneRateio(itemId: string, participantId: string) {
+    await this.prisma.rateioEntry.delete({
+      where: { itemId_participantId: { itemId, participantId } },
+    });
+  }
 }

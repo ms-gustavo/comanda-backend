@@ -66,11 +66,27 @@ model Item {
   assignedToId String?
   assignedTo   Participant? @relation(fields: [assignedToId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  RateioEntry RateioEntry[]
 
   @@index([comandaId])
   @@index([assignedToId])
+}
+
+model RateioEntry {
+  id            String      @id @default(uuid())
+  itemId        String
+  item          Item        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  percentage    Decimal     @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([itemId, participantId])
+  @@index([participantId])
 }
 
 model Participant {
@@ -80,9 +96,10 @@ model Participant {
   comandaId String
   comanda   Comanda @relation(fields: [comandaId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  Item      Item[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  Item        Item[]
+  RateioEntry RateioEntry[]
 
   @@unique([comandaId, name])
   @@index([comandaId])

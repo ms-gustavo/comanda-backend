@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -22,6 +23,7 @@ import { strongEtagFrom } from '@common/utils/etag.util';
 import { GetMyComandasQueryDto } from './dto/get-my-comandas.query';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
+import { PutItemRateioDto } from './dto/put-item-rateio.dto';
 
 @Controller('comandas')
 @UseGuards(JwtAuthGuard)
@@ -109,5 +111,24 @@ export class ComandaController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteItem(@Param('itemId') itemId: string) {
     await this.service.removeItem(itemId);
+  }
+
+  @Get('/items/:itemId/rateio')
+  async getItemRateio(@Param('itemId') itemId: string) {
+    return this.service.getItemRateio(itemId);
+  }
+
+  @Put('/items/:itemId/rateio')
+  async putItemRateio(@Param('itemId') itemId: string, @Body() dto: PutItemRateioDto) {
+    return this.service.putItemRateio(itemId, dto.entries);
+  }
+
+  @Delete('/items/:itemId/rateio/:participantsId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteItemRateioEntry(
+    @Param('itemId') itemId: string,
+    @Param('participantId') participantId: string,
+  ) {
+    await this.service.deleteItemRateioEntry(itemId, participantId);
   }
 }
