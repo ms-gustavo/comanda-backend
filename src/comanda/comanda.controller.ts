@@ -27,6 +27,7 @@ import { PutItemRateioDto } from './dto/put-item-rateio.dto';
 import { CreateInviteDto } from './dto/create-invite.dto';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
 import * as QRCode from 'qrcode';
+import { CloseComandaDto } from './dto/close-comanda.dto';
 
 @Controller('comandas')
 @UseGuards(JwtAuthGuard)
@@ -196,5 +197,22 @@ export class ComandaController {
     reply.header('Content-Type', 'image/png');
     reply.header('Cache-Control', 'no-store');
     reply.send(pngBuffer);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/close')
+  async closeComanda(
+    @Param('id') id: string,
+    @AuthUser() user: { id: string },
+    @Body() dto: CloseComandaDto,
+    @Res() res: FastifyReply,
+  ) {
+    const summary = await this.service.closeComanda(id, user.id, dto);
+    return res.status(200).send(summary);
+  }
+
+  @Get(':id/close/summary')
+  async closingSummary(@Param('id') id: string) {
+    return this.service.getClosingSummary(id);
   }
 }
