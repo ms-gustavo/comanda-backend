@@ -7,6 +7,9 @@ import {
 import { ComandaRepository } from './comanda.repository';
 import { PrismaService } from '@prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
+import { CloseComandaDto, CloseSummary, RoundStrategy } from './dto/close-comanda.dto';
+import { ComandaStatus } from '@prisma/client';
+import { ClosingCalculator } from './closing-calculator';
 
 type Role = 'owner' | 'participant' | 'all';
 
@@ -15,7 +18,38 @@ export class ComandaService {
   constructor(
     private readonly repo: ComandaRepository,
     private readonly prisma: PrismaService,
+    private readonly calculator: ClosingCalculator,
   ) {}
+
+  private async getComandaForClosing(comandaId: string, userId: string) {
+    const comanda = await this.prisma.comanda.findUnique({ where: { id: comandaId } });
+    if (!comanda) throw new NotFoundException('Comanda nǜo encontrada');
+    if (comanda.status !== 'OPEN') throw new BadRequestException(`Comanda nǜo estǭ aberta`);
+
+    if (comanda.ownerId !== userId)
+      throw new ForbiddenException(`Apenas o dono pode fechar a comanda`);
+    return comanda;
+  }
+
+  private async persistClosingSummary(
+    comandaId: string,
+    userId: string,
+    serviceFeePct: Decimal,
+    discountPct: Decimal,
+    closingSummary: CloseSummary,
+  ) {
+    await this.prisma.comanda.update({
+      where: { id: comandaId },
+      data: {
+        status: ComandaStatus.CLOSED,
+        closedAt: new Date(),
+        closedById: userId,
+        serviceFeePct,
+        discountPct,
+        closingSummary,
+      },
+    });
+  }
 
   private toListResponse(
     rows: Array<{
@@ -413,5 +447,41 @@ export class ComandaService {
     if (!c) throw new NotFoundException('Comanda não encontrada');
     if (c.ownerId !== requesterId) throw new ForbiddenException('Apenas o dono pode revogar');
     await this.repo.deleteInvite(code, comandaId);
+  }
+
+  async closeComanda(
+    comandaId: string,
+    userId: string,
+    dto: CloseComandaDto,
+  ): Promise<CloseSummary> {
+    const comanda = await this.getComandaForClosing(comandaId, userId);
+    const { serviceFeePct, discountPct, extras } = this.calculator.resolveCloseInputs(dto, comanda);
+    const totals = await this.getTotals(comandaId);
+    const strategy = dto.roundStrategy ?? RoundStrategy.NONE;
+    const roundTo = new Decimal(dto.roundTo ?? 0.01);
+    const closingSummary = this.calculator.computeSummary(
+      comandaId,
+      userId,
+      totals,
+      { serviceFeePct, discountPct, extras },
+      strategy,
+      roundTo,
+    );
+
+    await this.persistClosingSummary(comandaId, userId, serviceFeePct, discountPct, closingSummary);
+
+    return closingSummary;
+  }
+
+  async getClosingSummary(comandaId: string) {
+    const comanda = await this.prisma.comanda.findUnique({
+      where: { id: comandaId },
+      select: { closingSummary: true, status: true },
+    });
+    if (!comanda) throw new NotFoundException('Comanda não encontrada');
+    if (comanda.status !== 'CLOSED' || !comanda.closingSummary) {
+      throw new BadRequestException('Comanda ainda não está fechada');
+    }
+    return comanda.closingSummary;
   }
 }
