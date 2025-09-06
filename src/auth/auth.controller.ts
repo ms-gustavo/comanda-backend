@@ -44,6 +44,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    console.log('Login attempt', dto.email);
     const ua = req.headers['user-agent'] as string | undefined;
     const ip = (req.headers['x-forwarded-for'] as string) || (req.ip as string);
 

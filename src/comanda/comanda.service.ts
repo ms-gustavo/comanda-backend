@@ -23,8 +23,8 @@ export class ComandaService {
 
   private async getComandaForClosing(comandaId: string, userId: string) {
     const comanda = await this.prisma.comanda.findUnique({ where: { id: comandaId } });
-    if (!comanda) throw new NotFoundException('Comanda nǜo encontrada');
-    if (comanda.status !== 'OPEN') throw new BadRequestException(`Comanda nǜo estǭ aberta`);
+    if (!comanda) throw new NotFoundException('Comanda não encontrada');
+    if (comanda.status !== 'OPEN') throw new BadRequestException(`Comanda não está aberta`);
 
     if (comanda.ownerId !== userId)
       throw new ForbiddenException(`Apenas o dono pode fechar a comanda`);
@@ -175,6 +175,38 @@ export class ComandaService {
       ownerId,
       participantsNames,
     });
+  }
+
+  async addParticipants(comandaId: string, requesterId: string, names: string[]) {
+    if (!names || names.length === 0) throw new BadRequestException('Lista de nomes vazia');
+    const snap = await this.repo.findSnapshotById(comandaId);
+    if (!snap) throw new NotFoundException('Comanda não encontrada');
+    if (snap.ownerId !== requesterId)
+      throw new ForbiddenException('Apenas o dono pode adicionar participantes manualmente');
+
+    // Normaliza nomes, remove duplicados e já existentes
+    const incoming = Array.from(
+      new Set(names.map((n) => n.trim()).filter((n) => n.length >= 2 && n.length <= 60)),
+    );
+    if (incoming.length === 0)
+      throw new BadRequestException('Nenhum nome válido após normalização');
+
+    const existingNames = new Set(snap.participants.map((p) => p.name.toLowerCase()));
+    const toCreate = incoming.filter((n) => !existingNames.has(n.toLowerCase()));
+    if (toCreate.length === 0)
+      return { created: 0, skipped: incoming.length, participants: snap.participants };
+
+    await this.prisma.participant.createMany({
+      data: toCreate.map((name) => ({ name, comandaId })),
+      skipDuplicates: true,
+    });
+
+    const updated = await this.repo.findSnapshotById(comandaId);
+    return {
+      created: toCreate.length,
+      skipped: incoming.length - toCreate.length,
+      participants: updated!.participants.map((p) => ({ id: p.id, name: p.name })),
+    };
   }
 
   async getSnapshot(comandaId: string) {

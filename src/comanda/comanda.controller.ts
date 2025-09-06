@@ -28,6 +28,7 @@ import { CreateInviteDto } from './dto/create-invite.dto';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
 import * as QRCode from 'qrcode';
 import { CloseComandaDto } from './dto/close-comanda.dto';
+import { AddParticipantsDto } from './dto/add-participants.dto';
 
 @Controller('comandas')
 @UseGuards(JwtAuthGuard)
@@ -43,7 +44,7 @@ export class ComandaController {
       cursor: query.cursor,
       limit: query.limit ?? 20,
     });
-
+    console.log('res:', res);
     return res;
   }
 
@@ -103,6 +104,16 @@ export class ComandaController {
   async addItem(@Param('id') id: string, @Body() dto: CreateItemDto) {
     const it = await this.service.addItems(id, dto);
     return { ...it, price: (it.price as any).toFixed(2) };
+  }
+
+  @Post(':id/participants')
+  @HttpCode(HttpStatus.OK)
+  async addParticipants(
+    @Param('id') id: string,
+    @AuthUser() user: { sub: string },
+    @Body() dto: AddParticipantsDto,
+  ) {
+    return this.service.addParticipants(id, user.sub, dto.names);
   }
 
   @Patch('/items/:itemId')
